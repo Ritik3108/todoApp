@@ -1,6 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:html_editor_enhanced/html_editor.dart';
 import 'package:intl/intl.dart';
+import 'package:todoapp/dialog.dart';
+import 'package:todoapp/taskDetails.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -10,18 +13,21 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  List<String> items = [];
   List<bool> strikes = [];
   List<DateTime> date = [];
   DateTime? dateTime;
   final myController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
-  void _saveTask() {
+  void _saveTask(String desc, String url) {
     final taskName = myController.text;
-    FirebaseFirestore.instance
-        .collection('task')
-        .add({"name": taskName, "date": DateTime.now(), "strike": false});
+    FirebaseFirestore.instance.collection('task').add({
+      "name": taskName,
+      "url": url,
+      "desc": desc,
+      "date": DateTime.now(),
+      "strike": false
+    });
   }
 
   @override
@@ -33,7 +39,7 @@ class _HomePageState extends State<HomePage> {
         body: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Spacer(),
+            const Spacer(),
             const Text("TODO APP"),
             const Divider(
               height: 4,
@@ -67,12 +73,10 @@ class _HomePageState extends State<HomePage> {
                       );
                     } else {
                       final messages = snapshot.data!.docs;
-                      items = [];
                       date = [];
                       strikes = [];
                       if (messages.isNotEmpty) {
                         for (var message in messages) {
-                          items.add(message['name']);
                           strikes.add(message['strike']);
                           date.add(message['date'].toDate());
                         }
@@ -84,54 +88,115 @@ class _HomePageState extends State<HomePage> {
                         itemCount: snapshot.data!.docs.length,
                         shrinkWrap: true,
                         itemBuilder: (_, int index) {
-                          return ListTile(
-                            dense: true,
-                            minLeadingWidth: 5,
-                            leading: Text(index.toString()),
-                            title: Row(
-                              children: [
-                                Expanded(
-                                  child: CheckboxListTile(
-                                    controlAffinity:
-                                        ListTileControlAffinity.leading,
-                                    title: Text(
-                                      snapshot.data!.docs[index]['name'],
-                                      style: TextStyle(
-                                          decoration: strikes[index]
-                                              ? TextDecoration.lineThrough
-                                              : null,
-                                          overflow: TextOverflow.ellipsis),
-                                      maxLines: 1,
+                          return Dismissible(
+                            key: UniqueKey(),
+                            onDismissed: (dir) {
+                              showDialog(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  content: const Text("Are you sure?"),
+                                  actions: [
+                                    // ignore: deprecated_member_use
+                                    TextButton(
+                                      child: const Text("No Thanks"),
+                                      onPressed: () {
+                                        Navigator.of(context).pop();
+                                        setState(() {});
+                                      },
                                     ),
-                                    value: strikes[index],
-                                    onChanged: (val) {
-                                      setState(() {
-                                        strikes[index] = val!;
+                                    // ignore: deprecated_member_use
+                                    TextButton(
+                                      child: const Text("Yes"),
+                                      onPressed: () async {
                                         FirebaseFirestore.instance
                                             .collection("task")
                                             .doc(snapshot.data!.docs[index].id)
-                                            .update({
-                                          "strike":
-                                              strikes[index] ? true : false
-                                        });
-                                      });
-                                    },
-                                  ),
+                                            .delete();
+                                        Navigator.of(context).pop();
+                                      },
+                                    )
+                                  ],
                                 ),
-                                Text(DateFormat('dd MMM yyyy')
-                                    .format(date[index])),
-                              ],
-                            ),
-                            trailing: ElevatedButton(
-                              child: const Text(
-                                'DELETE',
-                              ),
-                              onPressed: () {
-                                FirebaseFirestore.instance
-                                    .collection("task")
-                                    .doc(snapshot.data!.docs[index].id)
-                                    .delete();
+                              );
+                            },
+                            child: ListTile(
+                              dense: true,
+                              minLeadingWidth: 5,
+                              onTap: () {
+                                Navigator.of(context).push(MaterialPageRoute(
+                                    builder: (context) => TaskDetails(
+                                          docs: snapshot.data!.docs[index],
+                                        )));
                               },
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: CheckboxListTile(
+                                      controlAffinity:
+                                          ListTileControlAffinity.leading,
+                                      title: Padding(
+                                        padding:
+                                            const EdgeInsets.only(top: 8.0),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              snapshot.data!.docs[index]
+                                                  ['name'],
+                                              style: TextStyle(
+                                                  decoration: strikes[index]
+                                                      ? TextDecoration
+                                                          .lineThrough
+                                                      : null,
+                                                  overflow:
+                                                      TextOverflow.ellipsis),
+                                              maxLines: 1,
+                                            ),
+                                            Text(
+                                              snapshot.data!.docs[index]
+                                                  ['desc'],
+                                              style: const TextStyle(
+                                                  fontSize: 13,
+                                                  color: Colors.grey,
+                                                  overflow:
+                                                      TextOverflow.ellipsis),
+                                              maxLines: 1,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      value: strikes[index],
+                                      onChanged: (val) {
+                                        setState(() {
+                                          strikes[index] = val!;
+                                          FirebaseFirestore.instance
+                                              .collection("task")
+                                              .doc(
+                                                  snapshot.data!.docs[index].id)
+                                              .update({
+                                            "strike":
+                                                strikes[index] ? true : false
+                                          });
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                  Text(DateFormat('dd MMM yyyy')
+                                      .format(date[index])),
+                                ],
+                              ),
+                              trailing: ElevatedButton(
+                                child: const Text(
+                                  'DELETE',
+                                ),
+                                onPressed: () {
+                                  FirebaseFirestore.instance
+                                      .collection("task")
+                                      .doc(snapshot.data!.docs[index].id)
+                                      .delete();
+                                },
+                              ),
                             ),
                           );
                         },
@@ -161,7 +226,6 @@ class _HomePageState extends State<HomePage> {
                         decoration: InputDecoration(
                             filled: true,
                             focusedBorder: OutlineInputBorder(
-                              // borderSide:  BorderSide(color: AppColors.Light_Black, width: 1.0),
                               borderRadius: BorderRadius.circular(15.0),
                             ),
                             border: OutlineInputBorder(
@@ -188,9 +252,11 @@ class _HomePageState extends State<HomePage> {
                       child: const Text(
                         '+ADD',
                       ),
-                      onPressed: () {
+                      onPressed: () async {
                         if (_formKey.currentState!.validate()) {
-                          _saveTask();
+                          await showDialogs(context: context).then((value) {
+                            _saveTask(value['desc'], value['url']);
+                          });
                           myController.clear();
                         }
                       },
